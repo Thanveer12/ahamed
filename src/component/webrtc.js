@@ -1,7 +1,7 @@
 
 import {io} from 'socket.io-client';
 // const mediasoupClient = require('mediasoup-client')
-import {Device, Producer} from 'mediasoup-client';
+import {Device} from 'mediasoup-client';
 import { useEffect, useRef, useState } from 'react';
 import './WebRtcVideo.scss';
 
@@ -13,6 +13,7 @@ let device
 let rtpCapabilities
 let producerTransport
 let consumerTransports = []
+let consumerTransport;
 let audioProducer
 let videoProducer
 let consumer
@@ -62,6 +63,11 @@ const WebRtcVideo = () => {
     const [muteAudio, setMuteAudio] = useState(false);
     const [muteVideo, setMuteVideo] = useState(false);
     const [joinCall, setJoinCall] = useState(false);
+    const videoContainers = useRef()
+
+    useEffect(() => {
+        videoContainers.current = document.getElementById('videoContainer')
+    },[])
 
     const streamSuccess = (stream) => {
         localVideo.current.srcObject = stream
@@ -76,46 +82,19 @@ const WebRtcVideo = () => {
         joinRoom()
     }
 
-    // useEffect(() => {
-        
-    //     // localVideo = document.getElementById('localVideo');
-    //     // videoContainer = document.getElementById('videoContainer');
-    //     socket.on('connection-success', ({ socketId }) => {
-    //         console.log(socketId)
-    //         getLocalStream()
-    //       })
-
-    //     // server informs the client of a new producer just joined
-    // socket.on('new-producer', ({ producerId }) => signalNewConsumerTransport(producerId))
-
-    // socket.on('producer-closed', ({ remoteProducerId }) => {
-    //     // server notification is received when a producer is closed
-    //     // we need to close the client-side consumer and associated transport
-    //     const producerToClose = consumerTransports.find(transportData => transportData.producerId === remoteProducerId)
-    //     producerToClose.consumerTransport.close()
-    //     producerToClose.consumer.close()
-    
-    //     // remove the consumer transport from the list
-    //     consumerTransports = consumerTransports.filter(transportData => transportData.producerId !== remoteProducerId)
-    
-    //     // remove the video div element
-    //     // videoContainer.current.removeChild(document.getElementById(`td-${remoteProducerId}`))
-    //     })
-    // }, [])
-   
 
     const joinRoom = () => {
-    socket.emit('joinRoom', { roomName }, (data) => {
-        console.log(`Router RTP Capabilities... ${data.rtpCapabilities}`)
-        // we assign to local variable and will be used when
-        // loading the client Device (see createDevice above)
-        console.log(data.rtpCapabilities , 'joinroomcpaapap');
-        rtpCapabilities = data.rtpCapabilities
+        socket.emit('joinRoom', { roomName }, (data) => {
+            console.log(`Router RTP Capabilities... ${data.rtpCapabilities}`)
+            // we assign to local variable and will be used when
+            // loading the client Device (see createDevice above)
+            console.log(data.rtpCapabilities , 'joinroomcpaapap');
+            rtpCapabilities = data.rtpCapabilities
 
-        // once we have rtpCapabilities from the Router, create Device
-        console.log('sdsdsfsd')
-        createDevice()
-    })
+            // once we have rtpCapabilities from the Router, create Device
+            console.log('sdsdsfsd')
+            createDevice()
+        })
     }
 
     const getLocalStream = () => {
@@ -280,7 +259,7 @@ const WebRtcVideo = () => {
         }
         console.log(`PARAMS... ${params}`)
 
-        let consumerTransport
+        // let consumerTransport
         try {
         consumerTransport = device.createRecvTransport(params)
         } catch (error) {
@@ -357,12 +336,12 @@ const WebRtcVideo = () => {
         },
         ]
 
-        const videoContainers = document.getElementById('videoContainer')
+        
         // create a new div element for the new consumer media
         const newElem = document.createElement('div')
         newElem.setAttribute('id', `td-${remoteProducerId}`)
 
-        if (params.kind == 'audio') {
+        if (params.kind === 'audio') {
         //append to the audio container
         newElem.innerHTML = '<audio id="' + remoteProducerId + '" autoplay></audio>'
         } else {
@@ -371,7 +350,7 @@ const WebRtcVideo = () => {
         newElem.innerHTML = '<video id="' + remoteProducerId + '" autoplay class="video" ></video>'
         }
 
-        videoContainers.appendChild(newElem)
+        videoContainers.current.appendChild(newElem)
 
         // destructure and retrieve the video track from the producer
  
@@ -393,24 +372,9 @@ const WebRtcVideo = () => {
     })
     }
 
-    // useEffect(() => {
-    //     const videoEl = videoContainer.current[currentVideo];
-       
-    //     let stream;
-    //     getRemoteVideo.map((ev, index) => {
-    //         videoContainer.current[index] = ev.stream;
-    //     // if (ev.id === currentVideo) {
-    //     //     videoEl.srcObject = ev.stream;
-    //     // }
-    //     })
-    // }, [currentVideo])
-
     const makeCall = () => {
+        debugger;
         socket = io("http://localhost:3000/mediasoup")
-        // if (producerTransport) {
-        //     producerTransport.close();
-        // }
-        // console.log(producerTransport, 'producertrans', consumerTransports, 'consumetrans')
         socket.on('connection-success', ({ socketId }) => {
             console.log(socketId)
             getLocalStream()
@@ -431,8 +395,32 @@ const WebRtcVideo = () => {
         consumerTransports = consumerTransports.filter(transportData => transportData.producerId !== remoteProducerId)
     
         // remove the video div element
-        // videoContainer.current.removeChild(document.getElementById(`td-${remoteProducerId}`))
+        const targetElement = document.getElementById(`td-${remoteProducerId}`);
+
+        const isContained = videoContainers.current.contains(targetElement);
+        if (isContained) videoContainers.current.removeChild(document.getElementById(`td-${remoteProducerId}`))
         })
+    }
+
+    const closeConnection = () => {
+        setJoinCall(false)
+        console.log(device,'device')
+        socket.close();
+        device = null;
+        if (videoProducer && !videoProducer.closed) { 
+            videoProducer.close();
+        }
+
+        if (audioProducer && !audioProducer.closed) {
+            audioProducer.close();
+        }
+        if (consumerTransport && !consumerTransport.closed) {
+            consumerTransport.close();
+        }
+        if (producerTransport && !producerTransport.closed) {
+            producerTransport.close();
+        }
+        if  (videoContainers.current) videoContainers.current.remove();
     }
   
 
@@ -451,6 +439,7 @@ const WebRtcVideo = () => {
                     muteAudio ? audioProducer.resume(): audioProducer.pause(); //firstValue._track.enabled = true : firstValue._track.enabled = false;
                     setMuteAudio(prev => !prev);
                 }}>{ muteAudio ? 'Unmute' : 'Mute'} Audio</button>
+                {joinCall && <button className='iassist-button' onClick={() => closeConnection()}>exit</button>}
             </div>
 
             <div className='iassist-mediasoup-container'>
