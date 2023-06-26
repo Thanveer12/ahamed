@@ -63,6 +63,7 @@ const WebRtcVideo = () => {
     const [muteAudio, setMuteAudio] = useState(false);
     const [muteVideo, setMuteVideo] = useState(false);
     const [joinCall, setJoinCall] = useState(false);
+    const [updateReRender, setUpdateReRender] = useState(false);
     const videoContainers = useRef()
 
     useEffect(() => {
@@ -70,11 +71,11 @@ const WebRtcVideo = () => {
     },[])
 
     const streamSuccess = (stream) => {
-        localVideo.current.srcObject = stream
+        setUpdateReRender(prev => !prev)
+        localVideo.current.srcObject = stream;
         if (stream) {
             setJoinCall(true);
         }
-
         audioParams = { track: stream.getAudioTracks()[0], ...audioParams };
 
         videoParams = { track: stream.getVideoTracks()[0], ...videoParams };
@@ -373,7 +374,7 @@ const WebRtcVideo = () => {
     }
 
     const makeCall = () => {
-        debugger;
+        videoContainers.current = document.getElementById('videoContainer')
         socket = io("http://localhost:3000/mediasoup")
         socket.on('connection-success', ({ socketId }) => {
             console.log(socketId)
@@ -404,41 +405,58 @@ const WebRtcVideo = () => {
 
     const closeConnection = () => {
         setJoinCall(false)
-        console.log(device,'device')
         socket.close();
-        device = null;
+        socket = null;
+        localVideo.current.srcObject = null;
+       
         if (videoProducer && !videoProducer.closed) { 
             videoProducer.close();
+            videoProducer = null;
         }
 
         if (audioProducer && !audioProducer.closed) {
             audioProducer.close();
+            audioProducer = null;
         }
         if (consumerTransport && !consumerTransport.closed) {
             consumerTransport.close();
+            consumerTransport = null;
+            consumingTransports = []
         }
         if (producerTransport && !producerTransport.closed) {
             producerTransport.close();
+            producerTransport = null;
         }
-        if  (videoContainers.current) videoContainers.current.remove();
+        audioParams = undefined;
+        videoParams = { params };
+        device = null;
+        if  (videoContainers.current) {
+            let children = videoContainers.current.children;
+            for (let i = 0; i < children.length; i++) {
+                if (i > 0) {
+                    videoContainers.current.removeChild(children[i]);
+                    i = i - 1;
+                }
+            }
+        }
     }
   
 
     return (
         <div className="iassist-video-main-conatiner">
             <div className='iassist-button-container'>
-                {!joinCall &&<button className='iassist-button' onClick={() => makeCall()}>Join call</button>}
-                <button className='iassist-button' onClick={() => {
+                {!joinCall && <button className='iassist-button' onClick={() => makeCall()}>Join call</button>}
+                {joinCall && <button className='iassist-button' onClick={() => {
                     !muteVideo ? videoProducer.pause() : videoProducer.resume();
                     setMuteVideo(prev => !prev)
                     
-                }}>{ muteVideo ? 'Unmute' : 'Mute'} Video</button>
-                <button className='iassist-button' onClick={() =>{
+                }}>{ muteVideo ? 'Unmute' : 'Mute'} Video</button>}
+                {joinCall && <button className='iassist-button' onClick={() =>{
                     // const {_producers } = producerTransport;
                     // const firstValue = Array.from(_producers.values())[0];
                     muteAudio ? audioProducer.resume(): audioProducer.pause(); //firstValue._track.enabled = true : firstValue._track.enabled = false;
                     setMuteAudio(prev => !prev);
-                }}>{ muteAudio ? 'Unmute' : 'Mute'} Audio</button>
+                }}>{ muteAudio ? 'Unmute' : 'Mute'} Audio</button>}
                 {joinCall && <button className='iassist-button' onClick={() => closeConnection()}>exit</button>}
             </div>
 
